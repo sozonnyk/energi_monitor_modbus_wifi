@@ -33,7 +33,6 @@ HASensorNumber freqSensor("freq", HASensorNumber::PrecisionP1);
 HASensorNumber totalEnergySensor("total_power", HASensorNumber::PrecisionP1);
 HASensorNumber rssi("rssi", HASensorNumber::PrecisionP0);
 
-
 float reform_uint16_2_float32(uint16_t u1, uint16_t u2) {
 	uint32_t num = ((uint32_t) u1 & 0xFFFF) << 16 | ((uint32_t) u2 & 0xFFFF);
 	float numf;
@@ -77,67 +76,66 @@ void setup() {
 	byte mac[6];
 	WiFi.macAddress(mac);
 	device.setUniqueId(mac, sizeof(mac));
-    device.setName("Power Meter");
-    device.setSoftwareVersion("1.0.0");
-    device.setManufacturer("Andrew");
-    device.setModel("Power Meter");
+	device.setName("Power Meter");
+	device.setSoftwareVersion("1.0.0");
+	device.setManufacturer("Andrew");
+	device.setModel("Power Meter");
 
-    voltageASensor.setIcon("mdi:power-socket-au");
-    voltageASensor.setName("Voltage A");
-    voltageASensor.setUnitOfMeasurement("V");
+	voltageASensor.setIcon("mdi:power-socket-au");
+	voltageASensor.setName("Voltage A");
+	voltageASensor.setUnitOfMeasurement("V");
 
-    voltageBSensor.setIcon("mdi:power-socket-au");
-    voltageBSensor.setName("Voltage B");
-    voltageBSensor.setUnitOfMeasurement("V");
+	voltageBSensor.setIcon("mdi:power-socket-au");
+	voltageBSensor.setName("Voltage B");
+	voltageBSensor.setUnitOfMeasurement("V");
 
-    voltageCSensor.setIcon("mdi:power-socket-au");
-    voltageCSensor.setName("Voltage C");
-    voltageCSensor.setUnitOfMeasurement("V");
+	voltageCSensor.setIcon("mdi:power-socket-au");
+	voltageCSensor.setName("Voltage C");
+	voltageCSensor.setUnitOfMeasurement("V");
 
-    currentASensor.setIcon("mdi:lightning-bolt");
-    currentASensor.setName("Current A");
-    currentASensor.setUnitOfMeasurement("A");
+	currentASensor.setIcon("mdi:lightning-bolt");
+	currentASensor.setName("Current A");
+	currentASensor.setUnitOfMeasurement("A");
 
-    currentBSensor.setIcon("mdi:lightning-bolt");
-    currentBSensor.setName("Current B");
-    currentBSensor.setUnitOfMeasurement("A");
+	currentBSensor.setIcon("mdi:lightning-bolt");
+	currentBSensor.setName("Current B");
+	currentBSensor.setUnitOfMeasurement("A");
 
-    currentCSensor.setIcon("mdi:lightning-bolt");
-    currentCSensor.setName("Current C");
-    currentCSensor.setUnitOfMeasurement("A");
+	currentCSensor.setIcon("mdi:lightning-bolt");
+	currentCSensor.setName("Current C");
+	currentCSensor.setUnitOfMeasurement("A");
 
-    fullPowerSensor.setIcon("mdi:meter-electric-outline");
-    fullPowerSensor.setName("Power");
-    fullPowerSensor.setUnitOfMeasurement("W");
-    fullPowerSensor.setDeviceClass("power");
+	fullPowerSensor.setIcon("mdi:meter-electric-outline");
+	fullPowerSensor.setName("Power");
+	fullPowerSensor.setUnitOfMeasurement("W");
+	fullPowerSensor.setDeviceClass("power");
 
+	powerASensor.setIcon("mdi:transmission-tower");
+	powerASensor.setName("Power A");
+	powerASensor.setUnitOfMeasurement("W");
 
-    powerASensor.setIcon("mdi:transmission-tower");
-    powerASensor.setName("Power A");
-    powerASensor.setUnitOfMeasurement("W");
+	powerBSensor.setIcon("mdi:transmission-tower");
+	powerBSensor.setName("Power B");
+	powerBSensor.setUnitOfMeasurement("W");
 
-    powerBSensor.setIcon("mdi:transmission-tower");
-    powerBSensor.setName("Power B");
-    powerBSensor.setUnitOfMeasurement("W");
+	powerCSensor.setIcon("mdi:transmission-tower");
+	powerCSensor.setName("Power C");
+	powerCSensor.setUnitOfMeasurement("W");
 
-    powerCSensor.setIcon("mdi:transmission-tower");
-    powerCSensor.setName("Power C");
-    powerCSensor.setUnitOfMeasurement("W");
+	freqSensor.setIcon("mdi:sine-wave");
+	freqSensor.setName("Frequency");
+	freqSensor.setUnitOfMeasurement("Hz");
 
-    freqSensor.setIcon("mdi:sine-wave");
-    freqSensor.setName("Frequency");
-    freqSensor.setUnitOfMeasurement("Hz");
+	totalEnergySensor.setIcon("mdi:meter-electric-outline");
+	totalEnergySensor.setName("Energy");
+	totalEnergySensor.setUnitOfMeasurement("kWh");
+	totalEnergySensor.setDeviceClass("energy");
 
-    totalEnergySensor.setIcon("mdi:meter-electric-outline");
-    totalEnergySensor.setName("Energy");
-    totalEnergySensor.setUnitOfMeasurement("kWh");
-    totalEnergySensor.setDeviceClass("energy");
+	rssi.setIcon("mdi:wifi");
+	rssi.setName("RSSI");
+	rssi.setUnitOfMeasurement("RSSI");
 
-    rssi.setIcon("mdi:wifi");
-    rssi.setName("RSSI");
-    rssi.setUnitOfMeasurement("RSSI");
-
-    mqtt.begin(MQTT_HOST, MQTT_USER, MQTT_PASSWD);
+	mqtt.begin(MQTT_HOST, MQTT_USER, MQTT_PASSWD);
 }
 
 void loop() {
@@ -151,12 +149,12 @@ void loop() {
 
 		if (WiFi.status() != WL_CONNECTED) {
 			Serial.println("WiFi lost");
-		    WiFi.disconnect();
-		    WiFi.reconnect();
+			WiFi.disconnect();
+			WiFi.reconnect();
 			if (WiFi.waitForConnectResult(WIFI_WAIT_TIME_MS) != WL_CONNECTED) {
-					Serial.println("Unable to connect WiFi");
-					return;
-				}
+				Serial.println("Unable to connect WiFi");
+				return;
+			}
 		}
 
 		float voltageA = getRTU(0x0000);
