@@ -3,15 +3,31 @@
 #include <WiFi.h>
 #include <ModbusMaster.h>
 #include <ArduinoHA.h>
+#include <BLEAdvertisedDevice.h>
+#include <BLEDevice.h>
+#include <BLEScan.h>
 
 #define WIFI_WAIT_TIME_MS 10000
 #define TZ_DEF "AEST-10AEDT,M10.1.0,M4.1.0/3"
 #define NTP_SERVER "time.google.com"
 
+#define REFERENCE_RSSI 60 //69 at 0dBm
+#define BT_POWER ESP_PWR_LVL_P9 //ESP_PWR_LVL_N0 for 0 dBm
+#define BT_SCAN_SEC 5
+#define BT_DISTANCE_COEFF 2
+
+#define RED "F7:3C:02:77:48:F9"
+#define YELLOW "C3:AD:CA:7D:C2:13"
+#define GREEN "FA:26:C1:CD:98:1F"
+
+BLEAddress red = BLEAddress(RED);
+BLEAddress yellow = BLEAddress(YELLOW);
+BLEAddress green = BLEAddress(GREEN);
+
 ModbusMaster node;
 WiFiClient client;
 HADevice device;
-HAMqtt mqtt(client, device, 15);
+HAMqtt mqtt(client, device, 18);
 
 int previousMinute = -1;
 
@@ -33,6 +49,10 @@ HASensorNumber freqSensor("freq", HASensorNumber::PrecisionP1);
 HASensorNumber totalEnergySensor("total_power", HASensorNumber::PrecisionP1);
 HASensorNumber rssi("rssi", HASensorNumber::PrecisionP0);
 
+HASensorNumber distanceRedSensor("distance_red", HASensorNumber::PrecisionP2);
+HASensorNumber distanceYellowSensor("distance_yellow", HASensorNumber::PrecisionP2);
+HASensorNumber distanceGreenSensor("distance_green", HASensorNumber::PrecisionP2);
+
 float reform_uint16_2_float32(uint16_t u1, uint16_t u2) {
 	uint32_t num = ((uint32_t) u1 & 0xFFFF) << 16 | ((uint32_t) u2 & 0xFFFF);
 	float numf;
@@ -53,13 +73,57 @@ float getRTU(uint16_t m_startAddress) {
 	}
 }
 
+struct distance {
+	float red;
+	float yellow;
+	float green;
+};
+
+distance getDistance() {
+	Serial.println("BT scan");
+	BLEDevice::setPower(BT_POWER, ESP_BLE_PWR_TYPE_SCAN);
+	BLEScan *scan = BLEDevice::getScan();
+	scan->setActiveScan(true);
+	BLEScanResults results = scan->start(BT_SCAN_SEC);
+	Serial.println("Scan done");
+
+	distance result;
+	result.green = -1;
+	result.red = -1;
+	result.yellow = -1;
+
+	for (int i = 0; i < results.getCount(); i++) {
+		BLEAdvertisedDevice device = results.getDevice(i);
+		BLEAddress address = device.getAddress();
+		float distance = pow(10,
+				((-(float) REFERENCE_RSSI - device.getRSSI()) / ((float) 10 * BT_DISTANCE_COEFF)));
+
+		Serial.print(address.toString().c_str());
+		Serial.print(" ");
+		Serial.println(distance);
+
+		if (address.equals(red)) result.red = distance;
+		if (address.equals(yellow)) result.yellow = distance;
+		if (address.equals(green)) result.green = distance;
+	}
+
+	return result;
+}
+
+void initTime() {
+	configTime(0, 0, NTP_SERVER);
+	setenv("TZ", TZ_DEF, 1);
+	tzset();
+}
+
 //The setup function is called once at startup of the sketch
 void setup() {
 	Serial.begin(115200);
 	Serial2.begin(9600, SERIAL_8E1);
 	node.begin(44, Serial2);
 
-	// Setup WiFI
+	BLEDevice::init("");
+
 	WiFi.begin(WIFI_SSID, WIFI_PASSWD);
 	while (WiFi.waitForConnectResult() != WL_CONNECTED) {
 		Serial.println("Connection Failed! Rebooting...");
@@ -69,9 +133,7 @@ void setup() {
 	Serial.print("IP: ");
 	Serial.println(WiFi.localIP());
 
-	configTime(0, 0, TZ_DEF);
-	setenv("TZ", "AEST-10AEDT,M10.1.0,M4.1.0/3", 1);
-	tzset();
+	initTime();
 
 	byte mac[6];
 	WiFi.macAddress(mac);
@@ -109,6 +171,7 @@ void setup() {
 	fullPowerSensor.setName("Power");
 	fullPowerSensor.setUnitOfMeasurement("W");
 	fullPowerSensor.setDeviceClass("power");
+	fullPowerSensor.setStateClass("measurment");
 
 	powerASensor.setIcon("mdi:transmission-tower");
 	powerASensor.setName("Power A");
@@ -130,10 +193,23 @@ void setup() {
 	totalEnergySensor.setName("Energy");
 	totalEnergySensor.setUnitOfMeasurement("kWh");
 	totalEnergySensor.setDeviceClass("energy");
+	totalEnergySensor.setStateClass("total_increasing");
 
 	rssi.setIcon("mdi:wifi");
 	rssi.setName("RSSI");
 	rssi.setUnitOfMeasurement("RSSI");
+
+	distanceRedSensor.setIcon("mdi:trash-can");
+	distanceRedSensor.setName("Distance Red Bin");
+	distanceRedSensor.setUnitOfMeasurement("m");
+
+	distanceGreenSensor.setIcon("mdi:trash-can");
+	distanceGreenSensor.setName("Distance Green Bin");
+	distanceGreenSensor.setUnitOfMeasurement("m");
+
+	distanceYellowSensor.setIcon("mdi:trash-can");
+	distanceYellowSensor.setName("Distance Yellow Bin");
+	distanceYellowSensor.setUnitOfMeasurement("m");
 
 	mqtt.begin(MQTT_HOST, MQTT_USER, MQTT_PASSWD);
 }
@@ -197,6 +273,12 @@ void loop() {
 		freqSensor.setValue(freq);
 		totalEnergySensor.setValue(totalEnergy);
 		rssi.setValue(rssiValue);
+
+		distance dist = getDistance();
+
+		distanceGreenSensor.setValue(dist.green);
+		distanceYellowSensor.setValue(dist.yellow);
+		distanceRedSensor.setValue(dist.red);
 	}
 	mqtt.loop();
 }
