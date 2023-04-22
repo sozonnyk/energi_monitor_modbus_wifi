@@ -6,6 +6,9 @@
 #include <BLEAdvertisedDevice.h>
 #include <BLEDevice.h>
 #include <BLEScan.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
 
 #define WIFI_WAIT_TIME_MS 10000
 #define TZ_DEF "AEST-10AEDT,M10.1.0,M4.1.0/3"
@@ -24,6 +27,7 @@ BLEAddress red = BLEAddress(RED);
 BLEAddress yellow = BLEAddress(YELLOW);
 BLEAddress green = BLEAddress(GREEN);
 
+AsyncWebServer server(80);
 ModbusMaster node;
 WiFiClient client;
 HADevice device;
@@ -116,14 +120,19 @@ void initTime() {
 	tzset();
 }
 
-//The setup function is called once at startup of the sketch
-void setup() {
-	Serial.begin(115200);
-	Serial2.begin(9600, SERIAL_8E1);
-	node.begin(44, Serial2);
+void initOta() {
+	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->send(200, "text/plain", "Power station");
+	});
 
-	BLEDevice::init("");
+	AsyncElegantOTA.begin(&server);
+	server.begin();
+}
 
+void initWifi(){
+	WiFi.setHostname("powerstation");
+	WiFi.mode(WIFI_STA);
+	WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
 	WiFi.begin(WIFI_SSID, WIFI_PASSWD);
 	while (WiFi.waitForConnectResult() != WL_CONNECTED) {
 		Serial.println("Connection Failed! Rebooting...");
@@ -132,8 +141,19 @@ void setup() {
 	}
 	Serial.print("IP: ");
 	Serial.println(WiFi.localIP());
+}
 
+//The setup function is called once at startup of the sketch
+void setup() {
+	Serial.begin(115200);
+	Serial2.begin(9600, SERIAL_8E1);
+	node.begin(44, Serial2);
+
+	BLEDevice::init("");
+
+	initWifi();
 	initTime();
+	initOta();
 
 	byte mac[6];
 	WiFi.macAddress(mac);
@@ -170,8 +190,6 @@ void setup() {
 	fullPowerSensor.setIcon("mdi:meter-electric-outline");
 	fullPowerSensor.setName("Power");
 	fullPowerSensor.setUnitOfMeasurement("W");
-	fullPowerSensor.setDeviceClass("power");
-	fullPowerSensor.setStateClass("measurment");
 
 	powerASensor.setIcon("mdi:transmission-tower");
 	powerASensor.setName("Power A");
