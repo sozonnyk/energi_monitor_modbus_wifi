@@ -23,34 +23,44 @@
 #define YELLOW "C3:AD:CA:7D:C2:13"
 #define GREEN "FA:26:C1:CD:98:1F"
 
+#define MAIN_METER_ID 44
+#define SOLAR_METER_ID 12
+
 BLEAddress red = BLEAddress(RED);
 BLEAddress yellow = BLEAddress(YELLOW);
 BLEAddress green = BLEAddress(GREEN);
 
+ModbusMaster mainMeterNode;
+ModbusMaster solarMeterNode;
+
 AsyncWebServer server(80);
-ModbusMaster node;
 WiFiClient client;
 HADevice device;
-HAMqtt mqtt(client, device, 18);
+HAMqtt mqtt(client, device, 23);
 
 int previousMinute = -1;
 
 HASensorNumber voltageASensor("voltage_a", HASensorNumber::PrecisionP2);
 HASensorNumber voltageBSensor("voltage_b", HASensorNumber::PrecisionP2);
 HASensorNumber voltageCSensor("voltage_c", HASensorNumber::PrecisionP2);
+HASensorNumber voltageSSensor("voltage_s", HASensorNumber::PrecisionP2);
 
 HASensorNumber currentASensor("current_a", HASensorNumber::PrecisionP3);
 HASensorNumber currentBSensor("current_b", HASensorNumber::PrecisionP3);
 HASensorNumber currentCSensor("current_c", HASensorNumber::PrecisionP3);
+HASensorNumber currentSSensor("current_s", HASensorNumber::PrecisionP3);
 
 HASensorNumber fullPowerSensor("full_power", HASensorNumber::PrecisionP1);
+HASensorNumber exportPowerSensor("export_power", HASensorNumber::PrecisionP1);
 
 HASensorNumber powerASensor("power_a", HASensorNumber::PrecisionP1);
 HASensorNumber powerBSensor("power_b", HASensorNumber::PrecisionP1);
 HASensorNumber powerCSensor("power_c", HASensorNumber::PrecisionP1);
+HASensorNumber powerSSensor("power_s", HASensorNumber::PrecisionP1);
 
 HASensorNumber freqSensor("freq", HASensorNumber::PrecisionP1);
 HASensorNumber totalEnergySensor("total_power", HASensorNumber::PrecisionP1);
+HASensorNumber totalSolarEnergySensor("total_powe_Sr", HASensorNumber::PrecisionP1);
 HASensorNumber rssi("rssi", HASensorNumber::PrecisionP0);
 
 HASensorNumber distanceRedSensor("distance_red", HASensorNumber::PrecisionP2);
@@ -64,7 +74,7 @@ float reform_uint16_2_float32(uint16_t u1, uint16_t u2) {
 	return numf;
 }
 
-float getRTU(uint16_t m_startAddress) {
+float getRTU(ModbusMaster node, uint16_t m_startAddress) {
 	uint8_t m_length = 2;
 	uint16_t result;
 
@@ -143,11 +153,12 @@ void initWifi(){
 	Serial.println(WiFi.localIP());
 }
 
-//The setup function is called once at startup of the sketch
+
 void setup() {
 	Serial.begin(115200);
 	Serial2.begin(9600, SERIAL_8E1);
-	node.begin(44, Serial2);
+	mainMeterNode.begin(MAIN_METER_ID, Serial2);
+	solarMeterNode.begin(SOLAR_METER_ID, Serial2);
 
 	BLEDevice::init("");
 
@@ -175,6 +186,10 @@ void setup() {
 	voltageCSensor.setName("Voltage C");
 	voltageCSensor.setUnitOfMeasurement("V");
 
+	voltageSSensor.setIcon("mdi:power-socket-au");
+	voltageSSensor.setName("Voltage Solar");
+	voltageSSensor.setUnitOfMeasurement("V");
+
 	currentASensor.setIcon("mdi:lightning-bolt");
 	currentASensor.setName("Current A");
 	currentASensor.setUnitOfMeasurement("A");
@@ -187,9 +202,17 @@ void setup() {
 	currentCSensor.setName("Current C");
 	currentCSensor.setUnitOfMeasurement("A");
 
+	currentSSensor.setIcon("mdi:lightning-bolt");
+	currentSSensor.setName("Current Solar");
+	currentSSensor.setUnitOfMeasurement("A");
+
 	fullPowerSensor.setIcon("mdi:meter-electric-outline");
 	fullPowerSensor.setName("Power");
 	fullPowerSensor.setUnitOfMeasurement("W");
+
+	exportPowerSensor.setIcon("mdi:meter-electric-outline");
+	exportPowerSensor.setName("Power Export");
+	exportPowerSensor.setUnitOfMeasurement("W");
 
 	powerASensor.setIcon("mdi:transmission-tower");
 	powerASensor.setName("Power A");
@@ -203,6 +226,10 @@ void setup() {
 	powerCSensor.setName("Power C");
 	powerCSensor.setUnitOfMeasurement("W");
 
+	powerSSensor.setIcon("mdi:transmission-tower");
+	powerSSensor.setName("Power Solar");
+	powerSSensor.setUnitOfMeasurement("W");
+
 	freqSensor.setIcon("mdi:sine-wave");
 	freqSensor.setName("Frequency");
 	freqSensor.setUnitOfMeasurement("Hz");
@@ -212,6 +239,12 @@ void setup() {
 	totalEnergySensor.setUnitOfMeasurement("kWh");
 	totalEnergySensor.setDeviceClass("energy");
 	totalEnergySensor.setStateClass("total_increasing");
+
+	totalSolarEnergySensor.setIcon("mdi:meter-electric-outline");
+	totalSolarEnergySensor.setName("Energy Solar");
+	totalSolarEnergySensor.setUnitOfMeasurement("kWh");
+	totalSolarEnergySensor.setDeviceClass("energy");
+	totalSolarEnergySensor.setStateClass("total_increasing");
 
 	rssi.setIcon("mdi:wifi");
 	rssi.setName("RSSI");
@@ -251,45 +284,73 @@ void loop() {
 			}
 		}
 
-		float voltageA = getRTU(0x0000);
-		float voltageB = getRTU(0x0002);
-		float voltageC = getRTU(0x0004);
+		float voltageA = getRTU(mainMeterNode, 0x0000);
+		float voltageB = getRTU(mainMeterNode, 0x0002);
+		float voltageC = getRTU(mainMeterNode, 0x0004);
 
-		float currentA = getRTU(0x0008);
-		float currentB = getRTU(0x000A);
-		float currentC = getRTU(0x000C);
+		float currentA = getRTU(mainMeterNode, 0x0008);
+		float currentB = getRTU(mainMeterNode, 0x000A);
+		float currentC = getRTU(mainMeterNode, 0x000C);
 
-		float fullPower = getRTU(0x0010);
-		float powerA = getRTU(0x0012);
-		float powerB = getRTU(0x0014);
-		float powerC = getRTU(0x0016);
+		float fullPower = getRTU(mainMeterNode, 0x0010);
+		float powerA = getRTU(mainMeterNode, 0x0012);
+		float powerB = getRTU(mainMeterNode, 0x0014);
+		float powerC = getRTU(mainMeterNode, 0x0016);
 
-		float freq = getRTU(0x0036);
-		float totalEnergy = getRTU(0x0100);
+		float freq = getRTU(mainMeterNode, 0x0036);
+		float totalEnergy = getRTU(mainMeterNode, 0x0100);
+
+		// ModbusMaster can't read the second meter without some delay.
+		delay(100);
+
+		float totalSolarEnergy = getRTU(solarMeterNode, 0x0100);
+		float powerS = getRTU(solarMeterNode, 0x0012);
+		float voltageS = getRTU(solarMeterNode, 0x0000);
+		float currentS = getRTU(solarMeterNode, 0x0008);
+
 		int8_t rssiValue = WiFi.RSSI();
+		float calculatedFullPower = fullPower-powerS;
+		float calculatedExportPower = 0;
+
+		if (calculatedFullPower < 0) {
+			calculatedExportPower = -calculatedFullPower;
+			calculatedFullPower = 0;
+		}
 
 		Serial.print("Full power ");
-		Serial.println(fullPower);
+		Serial.println(calculatedFullPower);
 
 		Serial.print("Total Energy ");
-		Serial.println(totalEnergy);
+		Serial.println(totalEnergy-totalSolarEnergy);
+
+		Serial.print("Solar power ");
+		Serial.println(powerS);
+
+		Serial.print("Solar Energy ");
+		Serial.println(totalSolarEnergy);
 
 		voltageASensor.setValue(voltageA);
 		voltageBSensor.setValue(voltageB);
 		voltageCSensor.setValue(voltageC);
+		voltageSSensor.setValue(voltageS);
 
 		currentASensor.setValue(currentA);
 		currentBSensor.setValue(currentB);
-		currentCSensor.setValue(currentC);
+		currentCSensor.setValue(currentC - currentS);
+		currentSSensor.setValue(currentS);
 
-		fullPowerSensor.setValue(fullPower);
+		fullPowerSensor.setValue(calculatedFullPower);
+		exportPowerSensor.setValue(calculatedExportPower);
 
 		powerASensor.setValue(powerA);
 		powerBSensor.setValue(powerB);
-		powerCSensor.setValue(powerC);
+		powerCSensor.setValue(powerC - powerS);
+		powerSSensor.setValue(powerS);
 
 		freqSensor.setValue(freq);
-		totalEnergySensor.setValue(totalEnergy);
+		totalEnergySensor.setValue(totalEnergy - totalSolarEnergy);
+		totalSolarEnergySensor.setValue(totalSolarEnergy);
+
 		rssi.setValue(rssiValue);
 
 		distance dist = getDistance();
