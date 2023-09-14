@@ -9,6 +9,9 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncElegantOTA.h>
+#include <esp_task_wdt.h>
+
+#define WDT_SECONDS 5 * 60
 
 #define WIFI_WAIT_TIME_MS 10000
 #define TZ_DEF "AEST-10AEDT,M10.1.0,M4.1.0/3"
@@ -39,6 +42,7 @@ HADevice device;
 HAMqtt mqtt(client, device, 23);
 
 int previousMinute = -1;
+
 
 HASensorNumber voltageASensor("voltage_a", HASensorNumber::PrecisionP2);
 HASensorNumber voltageBSensor("voltage_b", HASensorNumber::PrecisionP2);
@@ -155,6 +159,9 @@ void initWifi(){
 
 
 void setup() {
+	esp_task_wdt_init(WDT_SECONDS, true);
+	esp_task_wdt_add(NULL);
+
 	Serial.begin(115200);
 	Serial2.begin(9600, SERIAL_8E1);
 	mainMeterNode.begin(MAIN_METER_ID, Serial2);
@@ -271,6 +278,7 @@ void loop() {
 
 	if (time.tm_min != previousMinute) {
 		previousMinute = time.tm_min;
+		esp_task_wdt_reset();
 
 		Serial.println(&time, "%A, %B %d %Y %H:%M:%S");
 
