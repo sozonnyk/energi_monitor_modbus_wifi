@@ -23,7 +23,7 @@
 #define BT_DISTANCE_COEFF 2
 
 #define RED "F7:3C:02:77:48:F9"
-#define YELLOW "C3:AD:CA:7D:C2:13"
+#define YELLOW "C5:01:C8:9A:14:04"
 #define GREEN "FA:26:C1:CD:98:1F"
 
 #define MAIN_METER_ID 44
